@@ -60,16 +60,16 @@ STATUS_COLORS = {
 
 # ── AI provider config ───────────────────────────────────────────────────
 AI_PROVIDERS = {
-    "ChatGPT (GPT-4o)": {
+    "ChatGPT (GPT-5.4)": {
         "id": "openai",
-        "model": "gpt-4o",
+        "model": "gpt-5.4",
         "key_placeholder": "sk-...",
         "key_help": "Get one at platform.openai.com",
         "supports_search": True,   # via tool calling + brave/serper, or GPT-4o browsing
     },
-    "ChatGPT (GPT-4o mini)": {
+    "ChatGPT (GPT-5.5)": {
         "id": "openai",
-        "model": "gpt-4o-mini",
+        "model": "gpt-5.5",
         "key_placeholder": "sk-...",
         "key_help": "Get one at platform.openai.com",
         "supports_search": False,
