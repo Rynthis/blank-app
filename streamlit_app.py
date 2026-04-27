@@ -488,7 +488,7 @@ def _ai_openai(gene, itype, summary, api_key, model):
     try:
         resp = client.chat.completions.create(
             model=model,
-            max_tokens=5000,
+            max_completion_tokens=5000,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user},
