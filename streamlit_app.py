@@ -830,7 +830,6 @@ Final score is normalized to **0–10**.
 
         styled = (
             dff[display_cols]
-            .style
             .style.map(_score_bg, subset=["Score"])
             .format({
                 "Score":         "{:.2f}",
