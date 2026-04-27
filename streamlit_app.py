@@ -74,16 +74,16 @@ AI_PROVIDERS = {
         "key_help": "Get one at platform.openai.com",
         "supports_search": False,
     },
-    "Gemini 1.5 Pro": {
+    "Gemini 3 Flash Preview": {
         "id": "gemini",
-        "model": "gemini-1.5-pro",
+        "model": "gemini-3-flash-preview",
         "key_placeholder": "AIza...",
         "key_help": "Get one at aistudio.google.com",
         "supports_search": True,   # Gemini has built-in Google Search grounding
     },
-    "Gemini 1.5 Flash": {
+    "Gemini 3.1 Pro Preview": {
         "id": "gemini",
-        "model": "gemini-1.5-flash",
+        "model": "gemini-3.1-pro-preview",
         "key_placeholder": "AIza...",
         "key_help": "Get one at aistudio.google.com",
         "supports_search": True,
