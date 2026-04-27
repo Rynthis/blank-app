@@ -4,4 +4,5 @@ plotly
 requests
 typing
 anthropic
-
+openai 
+google-generativeai
