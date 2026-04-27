@@ -831,7 +831,7 @@ Final score is normalized to **0–10**.
         styled = (
             dff[display_cols]
             .style
-            .applymap(_score_bg, subset=["Score"])
+            .style.map(_score_bg, subset=["Score"])
             .format({
                 "Score":         "{:.2f}",
                 "Best IC50 (nM)": lambda x: f"{x:.3f}" if pd.notna(x) else "—",
