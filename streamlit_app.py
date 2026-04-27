@@ -88,6 +88,13 @@ AI_PROVIDERS = {
         "key_help": "Get one at aistudio.google.com",
         "supports_search": True,
     },
+    "Gemini 2.5 Pro": {
+        "id": "gemini",
+        "model": "gemini-2.5-pro",
+        "key_placeholder": "AIza...",
+        "key_help": "Get one at aistudio.google.com",
+        "supports_search": True,
+    },
 }
 
 # ══════════════════════════════════════════════════════════════════════════
