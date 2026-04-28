@@ -824,7 +824,7 @@ def _ai_oai_compat(gene, itype, summary, api_key, model, base_url):
     try:
         resp = client.chat.completions.create(
             model=model,
-            max_tokens=4096,
+            max_completion_tokens=4096,
             temperature=0.2,
             messages=[
                 {"role": "system", "content": system},
