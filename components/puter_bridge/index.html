@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Puter Bridge</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: "Segoe UI", Arial, sans-serif;
+    }
+
+    body {
+      margin: 0;
+      padding: 12px;
+      background: #f7fafc;
+      color: #102a43;
+    }
+
+    .card {
+      border: 1px solid #d9e2ec;
+      border-radius: 12px;
+      background: white;
+      padding: 12px;
+      box-shadow: 0 8px 24px rgba(16, 42, 67, 0.06);
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .title {
+      font-size: 14px;
+      font-weight: 700;
+      margin: 0;
+    }
+
+    .meta {
+      font-size: 12px;
+      color: #486581;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #eef2f6;
+      color: #243b53;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .status.ok {
+      background: #e3f9e5;
+      color: #1f7a2d;
+    }
+
+    .status.busy {
+      background: #eaf4ff;
+      color: #0b5cab;
+    }
+
+    button {
+      appearance: none;
+      border: 0;
+      border-radius: 10px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+    }
+
+    button.primary {
+      background: #0b7285;
+      color: white;
+    }
+
+    button.secondary {
+      background: #e9eef2;
+      color: #243b53;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: wait;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="status" id="status-pill">Checking Puter...</div>
+    <p class="title">Puter browser bridge</p>
+    <p class="meta" id="status-text">This panel handles Puter sign-in and browser-side AI calls.</p>
+    <div class="row">
+      <button class="primary" id="sign-in">Sign in with Puter</button>
+      <button class="secondary" id="sign-out">Sign out</button>
+    </div>
+  </div>
+
+  <script src="https://js.puter.com/v2/"></script>
+  <script type="module">
+    import { Streamlit } from "https://unpkg.com/streamlit-component-lib@2.0.0/dist/streamlit.js";
+
+    const statusPill = document.getElementById("status-pill");
+    const statusText = document.getElementById("status-text");
+    const signInButton = document.getElementById("sign-in");
+    const signOutButton = document.getElementById("sign-out");
+
+    let lastArgs = {};
+    let lastRequestId = null;
+    let lastSent = "";
+    let busy = false;
+
+    function extractText(resp) {
+      if (typeof resp === "string") {
+        return resp;
+      }
+      if (typeof resp?.text === "string") {
+        return resp.text;
+      }
+      const content = resp?.message?.content;
+      if (typeof content === "string") {
+        return content;
+      }
+      if (Array.isArray(content)) {
+        return content.map((part) => part?.text ?? "").join("\n");
+      }
+      try {
+        return JSON.stringify(resp);
+      } catch (error) {
+        return String(resp);
+      }
+    }
+
+    function updateUi(state) {
+      const signedIn = !!state?.signed_in;
+      const username = state?.user?.username || state?.user?.email || state?.user?.uuid || "";
+      statusPill.className = "status" + (busy ? " busy" : signedIn ? " ok" : "");
+      if (busy) {
+        statusPill.textContent = "Working";
+      } else if (signedIn) {
+        statusPill.textContent = "Connected";
+      } else {
+        statusPill.textContent = "Not connected";
+      }
+      if (busy) {
+        statusText.textContent = "Running Puter AI in the browser...";
+      } else if (signedIn) {
+        statusText.textContent = username ? `Signed in as ${username}.` : "Signed in to Puter.";
+      } else {
+        statusText.textContent = "Use the button above to sign in and unlock browser-side AI.";
+      }
+      signInButton.disabled = busy;
+      signOutButton.disabled = busy;
+      Streamlit.setFrameHeight();
+    }
+
+    function send(value) {
+      const payload = JSON.stringify(value);
+      if (payload === lastSent) {
+        Streamlit.setFrameHeight();
+        return;
+      }
+      lastSent = payload;
+      Streamlit.setComponentValue(value);
+      Streamlit.setFrameHeight();
+    }
+
+    async function currentStatus(type = "status") {
+      const signedIn = !!window.puter?.auth?.isSignedIn?.();
+      let user = null;
+      if (signedIn) {
+        try {
+          user = await window.puter.auth.getUser();
+        } catch (error) {
+          user = null;
+        }
+      }
+      return { type, signed_in: signedIn, user };
+    }
+
+    async function refreshStatus() {
+      const state = await currentStatus("status");
+      updateUi(state);
+      send(state);
+      return state;
+    }
+
+    async function runPuterCommand(command) {
+      if (!command || command.type !== "run_puter_ai" || !command.request_id) {
+        return;
+      }
+      if (command.request_id === lastRequestId) {
+        return;
+      }
+      lastRequestId = command.request_id;
+      busy = true;
+      updateUi(await currentStatus("status"));
+      try {
+        const signedIn = !!window.puter?.auth?.isSignedIn?.();
+        if (!signedIn) {
+          throw new Error("Not signed in to Puter.");
+        }
+        const response = await window.puter.ai.chat(command.messages || command.prompt, command.options || {});
+        send({
+          type: "puter_result",
+          request_id: command.request_id,
+          ok: true,
+          text: extractText(response),
+          signed_in: true
+        });
+      } catch (error) {
+        send({
+          type: "puter_result",
+          request_id: command.request_id,
+          ok: false,
+          error: error?.message || String(error),
+          signed_in: !!window.puter?.auth?.isSignedIn?.()
+        });
+      } finally {
+        busy = false;
+        updateUi(await currentStatus("status"));
+      }
+    }
+
+    signInButton.addEventListener("click", async () => {
+      busy = true;
+      updateUi({ signed_in: false });
+      try {
+        await window.puter.auth.signIn();
+      } catch (error) {
+        send({
+          type: "status",
+          signed_in: false,
+          user: null,
+          error: error?.message || String(error)
+        });
+      } finally {
+        busy = false;
+        await refreshStatus();
+      }
+    });
+
+    signOutButton.addEventListener("click", async () => {
+      busy = true;
+      updateUi(await currentStatus("status"));
+      try {
+        await window.puter.auth.signOut();
+      } catch (error) {
+        // Ignore and refresh state anyway.
+      } finally {
+        busy = false;
+        await refreshStatus();
+      }
+    });
+
+    Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, async (event) => {
+      lastArgs = event.detail.args || {};
+      await refreshStatus();
+      await runPuterCommand(lastArgs.command);
+    });
+
+    Streamlit.setComponentReady();
+    refreshStatus();
+  </script>
+</body>
+</html>
