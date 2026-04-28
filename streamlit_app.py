@@ -182,9 +182,9 @@ AI_PROVIDERS = {
         "free": True,
         "note": "Hosted Mistral 7B through OpenRouter's free tier.",
     },
-    "Free - Gemini 2.0 Flash": {
+    "Free - Gemini 2.5 Pro": {
         "id": "gemini",
-        "model": "gemini-2.0-flash",
+        "model": "gemini-2.5-pro",
         "key_placeholder": "AIza...",
         "key_help": "Free key at aistudio.google.com with no credit card needed",
         "key_required": True,
