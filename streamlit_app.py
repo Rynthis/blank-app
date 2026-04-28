@@ -202,9 +202,9 @@ AI_PROVIDERS = {
         "free": True,
         "note": "Reliable Gemini free-tier fallback.",
     },
-    "Paid - OpenAI - GPT-4o": {
+    "Paid - OpenAI - GPT-5.4": {
         "id": "oai_compat",
-        "model": "gpt-4o",
+        "model": "gpt-5.4",
         "base_url": "https://api.openai.com/v1",
         "key_placeholder": "sk-...",
         "key_help": "Paid key at platform.openai.com",
