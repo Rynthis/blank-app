@@ -2,10 +2,21 @@
 PharmaQuery Pro ───────────────
 Comprehensive drug-gene interaction discovery.
 Queries ChEMBL · DGIdb · Open Targets · IUPHAR · PubChem in parallel,
-then synthesizes and scores results with ChatGPT or Gemini + web search.
+then synthesizes and scores results with a choice of AI provider.
 
-Run: streamlit run app.py
-Requirements: pip install streamlit requests pandas plotly openai google-generativeai
+FREE options (no credit card needed):
+  • Groq        – free tier, fast Llama/Mixtral, sign up at console.groq.com
+  • Ollama      – 100% local, no API key, install from ollama.com
+  • OpenRouter  – free models (Llama, Mistral, Gemma), sign up at openrouter.ai
+  • Gemini      – free tier via Google AI Studio at aistudio.google.com
+
+Paid options:
+  • OpenAI ChatGPT  – platform.openai.com
+  • (Gemini Pro is also paid but has a generous free tier)
+
+Run:  streamlit run app.py
+Deps: pip install streamlit requests pandas plotly openai google-generativeai
+      (openai package covers Groq + OpenRouter too via compatible base_url)
 """
 
 import streamlit as st
@@ -59,41 +70,130 @@ STATUS_COLORS = {
 }
 
 # ── AI provider config ───────────────────────────────────────────────────
+# Providers are split into FREE and PAID groups for the UI.
+# "id" maps to the backend function used to call the model.
+# OpenAI-compatible APIs (Groq, Ollama, OpenRouter) all use id="oai_compat".
+
 AI_PROVIDERS = {
-    "ChatGPT (GPT-5.4)": {
-        "id": "openai",
-        "model": "gpt-5.4",
-        "key_placeholder": "sk-...",
-        "key_help": "Get one at platform.openai.com",
-        "supports_search": True,   # via tool calling + brave/serper, or GPT-4o browsing
-    },
-    "ChatGPT (GPT-5.5)": {
-        "id": "openai",
-        "model": "gpt-5.5",
-        "key_placeholder": "sk-...",
-        "key_help": "Get one at platform.openai.com",
+    # ── 100% FREE ─────────────────────────────────────────────────────────
+    "🆓 Groq – Llama 3.3 70B (free)": {
+        "id": "oai_compat",
+        "model": "llama-3.3-70b-versatile",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_placeholder": "gsk_...",
+        "key_help": "Free API key at console.groq.com — no credit card needed",
+        "key_required": True,
         "supports_search": False,
+        "free": True,
+        "note": "Fast inference, generous free tier (14,400 req/day)",
     },
-    "Gemini 3 Flash Preview": {
-        "id": "gemini",
-        "model": "gemini-3-flash-preview",
-        "key_placeholder": "AIza...",
-        "key_help": "Get one at aistudio.google.com",
-        "supports_search": True,   # Gemini has built-in Google Search grounding
+    "🆓 Groq – Llama 3.1 8B (free, fastest)": {
+        "id": "oai_compat",
+        "model": "llama-3.1-8b-instant",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_placeholder": "gsk_...",
+        "key_help": "Free API key at console.groq.com — no credit card needed",
+        "key_required": True,
+        "supports_search": False,
+        "free": True,
+        "note": "Fastest option; slightly less depth than 70B",
     },
-    "Gemini 3.1 Pro Preview": {
+    "🆓 Groq – Mixtral 8x7B (free)": {
+        "id": "oai_compat",
+        "model": "mixtral-8x7b-32768",
+        "base_url": "https://api.groq.com/openai/v1",
+        "key_placeholder": "gsk_...",
+        "key_help": "Free API key at console.groq.com — no credit card needed",
+        "key_required": True,
+        "supports_search": False,
+        "free": True,
+        "note": "MoE model, strong reasoning, 32k context",
+    },
+    "🆓 Ollama – local (no key needed)": {
+        "id": "ollama",
+        "model": "",           # user picks model via text input
+        "base_url": "http://localhost:11434/v1",
+        "key_placeholder": "(none)",
+        "key_help": "Install Ollama from ollama.com, then run: ollama pull llama3",
+        "key_required": False,
+        "supports_search": False,
+        "free": True,
+        "note": "Runs on your machine — fully private, no cost ever",
+    },
+    "🆓 OpenRouter – Llama 3 8B (free tier)": {
+        "id": "oai_compat",
+        "model": "meta-llama/llama-3-8b-instruct:free",
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_placeholder": "sk-or-...",
+        "key_help": "Free key at openrouter.ai — no credit card for free models",
+        "key_required": True,
+        "supports_search": False,
+        "free": True,
+        "note": "Routes to free hosted Llama 3; may queue during peak times",
+    },
+    "🆓 OpenRouter – Mistral 7B (free tier)": {
+        "id": "oai_compat",
+        "model": "mistralai/mistral-7b-instruct:free",
+        "base_url": "https://openrouter.ai/api/v1",
+        "key_placeholder": "sk-or-...",
+        "key_help": "Free key at openrouter.ai — no credit card for free models",
+        "key_required": True,
+        "supports_search": False,
+        "free": True,
+        "note": "Mistral 7B Instruct via OpenRouter free tier",
+    },
+    "🆓 Gemini 2.0 Flash (free tier)": {
         "id": "gemini",
-        "model": "gemini-3.1-pro-preview",
+        "model": "gemini-2.0-flash",
         "key_placeholder": "AIza...",
-        "key_help": "Get one at aistudio.google.com",
+        "key_help": "Free key at aistudio.google.com — no credit card needed",
+        "key_required": True,
         "supports_search": True,
+        "free": True,
+        "note": "Google Search grounding available; generous free quota",
     },
-    "Gemini 2.5 Pro": {
+    "🆓 Gemini 1.5 Flash (free tier)": {
         "id": "gemini",
-        "model": "gemini-2.5-pro",
+        "model": "gemini-1.5-flash",
         "key_placeholder": "AIza...",
-        "key_help": "Get one at aistudio.google.com",
+        "key_help": "Free key at aistudio.google.com — no credit card needed",
+        "key_required": True,
         "supports_search": True,
+        "free": True,
+        "note": "Slightly older but very reliable free option",
+    },
+    # ── PAID ──────────────────────────────────────────────────────────────
+    "💳 ChatGPT – GPT-4o": {
+        "id": "oai_compat",
+        "model": "gpt-4o",
+        "base_url": "https://api.openai.com/v1",
+        "key_placeholder": "sk-...",
+        "key_help": "Paid key at platform.openai.com",
+        "key_required": True,
+        "supports_search": False,
+        "free": False,
+        "note": "OpenAI's flagship model",
+    },
+    "💳 ChatGPT – GPT-4o mini": {
+        "id": "oai_compat",
+        "model": "gpt-4o-mini",
+        "base_url": "https://api.openai.com/v1",
+        "key_placeholder": "sk-...",
+        "key_help": "Paid key at platform.openai.com",
+        "key_required": True,
+        "supports_search": False,
+        "free": False,
+        "note": "Cheaper OpenAI option",
+    },
+    "💳 Gemini 1.5 Pro": {
+        "id": "gemini",
+        "model": "gemini-1.5-pro",
+        "key_placeholder": "AIza...",
+        "key_help": "Paid / high-quota key at aistudio.google.com",
+        "key_required": True,
+        "supports_search": True,
+        "free": False,
+        "note": "Highest-quality Gemini model with Google Search grounding",
     },
 }
 
@@ -442,16 +542,16 @@ def consolidate(chembl, dgidb, ot, iuphar):
     return drugs
 
 # ══════════════════════════════════════════════════════════════════════════
-# AI SYNTHESIS  (ChatGPT / Gemini)
+# AI SYNTHESIS  (Groq / Ollama / OpenRouter / Gemini / OpenAI)
 # ══════════════════════════════════════════════════════════════════════════
 
 def _build_prompt(gene, itype, summary):
-    """Shared prompt content for both providers."""
+    """Shared prompt content for all providers."""
     system = f"""You are a world-class medicinal chemist and pharmacologist.
 Given raw database query results for the target "{gene}", produce a definitive,
 expert-curated JSON array of the top 12-18 {itype}s.
 
-Use available knowledge to:
+Use your knowledge to:
 • Verify current FDA approval status and clinical trial phases
 • Add important compounds missing from the database results
 • Confirm or correct IC50/Ki values (report best published value)
@@ -471,18 +571,22 @@ Return ONLY a valid JSON array with these exact keys per object:
   ai_bonus          – YOUR expert score 0-10 for: mechanistic validation, clinical importance,
                       research utility, novelty. Be discriminating; reserve 9-10 for landmark drugs.
 
-No markdown. No prose. Start with [ end with ]."""
+No markdown. No prose. No code fences. Start your response with [ and end with ]."""
 
     user = f"""Target: {gene} | Interaction type: {itype}
 Database candidates ({len(summary)} compounds):
 {json.dumps(summary, indent=2)}
 
-Return expert-curated JSON array of the top {itype}s of {gene}."""
+Return the expert-curated JSON array of the top {itype}s of {gene}.
+Remember: respond ONLY with the JSON array starting with [ and ending with ]."""
     return system, user
 
 
-def _ai_openai(gene, itype, summary, api_key, model):
-    """Call OpenAI ChatGPT."""
+def _ai_oai_compat(gene, itype, summary, api_key, model, base_url):
+    """
+    OpenAI-compatible endpoint: works for Groq, OpenRouter, OpenAI, and
+    any other provider that implements the /chat/completions spec.
+    """
     try:
         from openai import OpenAI
     except ImportError:
@@ -490,31 +594,82 @@ def _ai_openai(gene, itype, summary, api_key, model):
         return []
 
     system, user = _build_prompt(gene, itype, summary)
-    client = OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key or "ollama", base_url=base_url)
 
     try:
         resp = client.chat.completions.create(
             model=model,
-            max_completion_tokens=5000,
+            max_tokens=4096,
+            temperature=0.2,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": user},
             ],
-            # GPT-4o supports web browsing via the Responses API; here we use chat completions
-            # which relies on the model's training knowledge. For live search, use the
-            # Responses API or pass a search tool definition if your account supports it.
         )
         text = resp.choices[0].message.content or ""
+        # Strip any accidental markdown fences
+        text = re.sub(r"```(?:json)?", "", text).strip()
         m = re.search(r"\[[\s\S]*\]", text)
         if m:
             return json.loads(m.group(0))
+        st.warning("AI returned a response but no JSON array was found. Showing database results only.")
     except Exception as e:
-        st.error(f"OpenAI API error: {e}")
+        st.error(f"AI API error ({base_url}): {e}")
+    return []
+
+
+def _ai_ollama(gene, itype, summary, model):
+    """
+    Ollama local inference. Uses the OpenAI-compatible endpoint that Ollama
+    exposes at http://localhost:11434/v1 (Ollama >= 0.1.24).
+    Falls back to the native /api/generate endpoint if needed.
+    """
+    system, user = _build_prompt(gene, itype, summary)
+
+    # Try OpenAI-compat first (preferred)
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key="ollama", base_url="http://localhost:11434/v1")
+        resp = client.chat.completions.create(
+            model=model or "llama3",
+            max_tokens=4096,
+            temperature=0.2,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": user},
+            ],
+        )
+        text = resp.choices[0].message.content or ""
+        text = re.sub(r"```(?:json)?", "", text).strip()
+        m = re.search(r"\[[\s\S]*\]", text)
+        if m:
+            return json.loads(m.group(0))
+    except Exception:
+        pass
+
+    # Fallback: native Ollama generate API
+    try:
+        full_prompt = f"{system}\n\n{user}"
+        r = requests.post(
+            "http://localhost:11434/api/generate",
+            json={"model": model or "llama3", "prompt": full_prompt, "stream": False},
+            timeout=120,
+        )
+        text = r.json().get("response", "")
+        text = re.sub(r"```(?:json)?", "", text).strip()
+        m = re.search(r"\[[\s\S]*\]", text)
+        if m:
+            return json.loads(m.group(0))
+        st.warning("Ollama returned a response but no JSON array was found.")
+    except requests.exceptions.ConnectionError:
+        st.error("Cannot reach Ollama at localhost:11434. Is it running? Try: `ollama serve`")
+    except Exception as e:
+        st.error(f"Ollama error: {e}")
     return []
 
 
 def _ai_gemini(gene, itype, summary, api_key, model):
-    """Call Google Gemini (with Google Search grounding when available)."""
+    """Google Gemini — with Google Search grounding when available."""
     try:
         import google.generativeai as genai
     except ImportError:
@@ -524,33 +679,29 @@ def _ai_gemini(gene, itype, summary, api_key, model):
     system, user = _build_prompt(gene, itype, summary)
     genai.configure(api_key=api_key)
 
-    try:
-        gmodel = genai.GenerativeModel(
-            model_name=model,
-            system_instruction=system,
-            # Google Search grounding — available for 1.5 Pro / Flash
-            tools=["google_search_retrieval"],
-        )
+    def _try(with_search):
+        kwargs = {"model_name": model, "system_instruction": system}
+        if with_search:
+            kwargs["tools"] = ["google_search_retrieval"]
+        gmodel = genai.GenerativeModel(**kwargs)
         response = gmodel.generate_content(user)
         text = response.text or ""
+        text = re.sub(r"```(?:json)?", "", text).strip()
         m = re.search(r"\[[\s\S]*\]", text)
-        if m:
-            return json.loads(m.group(0))
+        return json.loads(m.group(0)) if m else []
+
+    try:
+        return _try(with_search=True)
+    except Exception:
+        pass
+    try:
+        return _try(with_search=False)
     except Exception as e:
-        # Retry without search grounding if it fails (e.g. unsupported model tier)
-        try:
-            gmodel2 = genai.GenerativeModel(model_name=model, system_instruction=system)
-            response2 = gmodel2.generate_content(user)
-            text2 = response2.text or ""
-            m2 = re.search(r"\[[\s\S]*\]", text2)
-            if m2:
-                return json.loads(m2.group(0))
-        except Exception as e2:
-            st.error(f"Gemini API error: {e2}")
+        st.error(f"Gemini API error: {e}")
     return []
 
 
-def ai_synthesize(gene, itype, drugs_raw, api_key, provider_cfg):
+def ai_synthesize(gene, itype, drugs_raw, api_key, provider_cfg, ollama_model=""):
     summary = []
     for d in list(drugs_raw.values())[:35]:
         summary.append({
@@ -563,13 +714,17 @@ def ai_synthesize(gene, itype, drugs_raw, api_key, provider_cfg):
             "chembl_id": d.get("chembl_id"),
         })
 
-    pid   = provider_cfg["id"]
-    model = provider_cfg["model"]
+    pid = provider_cfg["id"]
 
-    if pid == "openai":
-        return _ai_openai(gene, itype, summary, api_key, model)
+    if pid == "oai_compat":
+        return _ai_oai_compat(
+            gene, itype, summary,
+            api_key, provider_cfg["model"], provider_cfg["base_url"]
+        )
+    elif pid == "ollama":
+        return _ai_ollama(gene, itype, summary, ollama_model or "llama3")
     elif pid == "gemini":
-        return _ai_gemini(gene, itype, summary, api_key, model)
+        return _ai_gemini(gene, itype, summary, api_key, provider_cfg["model"])
     return []
 
 # ══════════════════════════════════════════════════════════════════════════
@@ -643,24 +798,46 @@ def main():
     with st.sidebar:
         st.header("⚙️ Configuration")
 
-        # AI provider selection
-        provider_name = st.selectbox(
-            "AI model",
-            list(AI_PROVIDERS.keys()),
-            help="ChatGPT uses the OpenAI API; Gemini uses the Google AI API."
-        )
-        provider_cfg = AI_PROVIDERS[provider_name]
+        # ── AI provider ──────────────────────────────────────────────────
+        st.subheader("🤖 AI Provider")
 
-        api_key = st.text_input(
-            f"API Key ({provider_cfg['id'].upper()})",
-            type="password",
-            help=provider_cfg["key_help"],
-            placeholder=provider_cfg["key_placeholder"],
-        )
-        if provider_cfg["id"] == "openai":
-            st.caption("💡 Get a key at [platform.openai.com](https://platform.openai.com)")
+        free_providers = [k for k, v in AI_PROVIDERS.items() if v["free"]]
+        paid_providers = [k for k, v in AI_PROVIDERS.items() if not v["free"]]
+
+        tier = st.radio("Tier", ["🆓 Free", "💳 Paid"], horizontal=True, label_visibility="collapsed")
+        provider_list = free_providers if tier == "🆓 Free" else paid_providers
+
+        provider_name = st.selectbox("Model", provider_list, label_visibility="collapsed")
+        provider_cfg  = AI_PROVIDERS[provider_name]
+
+        # Note about the provider
+        st.caption(f"ℹ️ {provider_cfg['note']}")
+
+        # Ollama model name input
+        ollama_model = ""
+        if provider_cfg["id"] == "ollama":
+            ollama_model = st.text_input(
+                "Ollama model name",
+                value="llama3",
+                help="Run `ollama list` to see installed models. Pull one with `ollama pull llama3`.",
+            )
+            st.caption("Make sure Ollama is running: `ollama serve`")
+
+        # API key input (hidden for Ollama)
+        api_key = ""
+        if provider_cfg["key_required"]:
+            api_key = st.text_input(
+                "API Key",
+                type="password",
+                help=provider_cfg["key_help"],
+                placeholder=provider_cfg["key_placeholder"],
+            )
+            st.caption(f"💡 {provider_cfg['key_help']}")
+
+        if provider_cfg.get("supports_search"):
+            st.success("✅ Live web search grounding available")
         else:
-            st.caption("💡 Get a key at [aistudio.google.com](https://aistudio.google.com)")
+            st.info("ℹ️ Uses model training knowledge (no live search)")
 
         st.divider()
         st.subheader("Filters")
@@ -679,10 +856,7 @@ def main():
 
         st.divider()
         st.caption("Databases: ChEMBL · DGIdb · Open Targets · IUPHAR · PubChem")
-        if provider_cfg["supports_search"]:
-            st.caption(f"✅ {provider_name} supports live search grounding")
-        else:
-            st.caption(f"ℹ️ {provider_name} uses training-data knowledge (no live search)")
+        st.caption(f"AI: {provider_name.split('–')[-1].strip() if '–' in provider_name else provider_name}")
 
     # ── Header ───────────────────────────────────────────────────────────
     st.title("🔬 PharmaQuery Pro")
@@ -725,8 +899,8 @@ Final score is normalized to **0–10**.
 """)
         return
 
-    if not api_key:
-        st.error(f"Please enter your {provider_cfg['id'].upper()} API key in the sidebar to enable AI synthesis.")
+    if provider_cfg["key_required"] and not api_key:
+        st.error(f"Please enter your API key in the sidebar to enable AI synthesis.")
         return
 
     gene = gene.strip()
@@ -767,8 +941,9 @@ Final score is normalized to **0–10**.
     )
 
     # ── AI synthesis ──────────────────────────────────────────────────────
-    prog.progress(5.5/6, f"{provider_name}: synthesizing...")
-    ai_drugs = ai_synthesize(gene, itype, drugs_raw, api_key, provider_cfg)
+    provider_label = provider_name.split("–")[0].strip()
+    prog.progress(5.5/6, f"{provider_label}: synthesizing...")
+    ai_drugs = ai_synthesize(gene, itype, drugs_raw, api_key, provider_cfg, ollama_model)
 
     # ── Build dataframe ───────────────────────────────────────────────────
     prog.progress(1.0, "Computing scores...")
